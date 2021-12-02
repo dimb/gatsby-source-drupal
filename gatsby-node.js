@@ -19,7 +19,7 @@ const asyncPool = require(`tiny-async-pool`);
 
 const bodyParser = require(`body-parser`);
 
-const limiter = Bottleneck({
+const limiter = new Bottleneck({
   minTime: 200
 });
 
@@ -254,13 +254,14 @@ exports.sourceNodes = async ({
         try {
 
           async function getDrupalData() {
-            return await axios.get(url, {
+            return axios.get(url, {
               auth: basicAuth,
               headers,
               params
             });
           }
-          d = limiter.wrap(getDrupalData);
+
+          d = await limiter.schedule(() => getDrupalData());
 
         } catch (error) {
           if (error.response && error.response.status == 405) {
