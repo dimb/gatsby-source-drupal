@@ -1,7 +1,7 @@
 "use strict";
 
 const axios = require(`axios`);
-
+const Bottleneck = require('bottleneck');
 const _ = require(`lodash`);
 
 const {
@@ -18,6 +18,10 @@ const {
 const asyncPool = require(`tiny-async-pool`);
 
 const bodyParser = require(`body-parser`);
+
+const limiter = Bottleneck({
+  minTime: 200
+});
 
 function gracefullyRethrow(activity, error) {
   // activity.panicOnBuild was implemented at some point in gatsby@2
@@ -225,6 +229,7 @@ exports.sourceNodes = async ({
       headers,
       params
     });
+
     allData = await Promise.all(_.map(data.data.links, async (url, type) => {
       if (disallowedLinkTypes.includes(type)) return;
       if (!url) return;
@@ -247,11 +252,16 @@ exports.sourceNodes = async ({
         let d;
 
         try {
-          d = await axios.get(url, {
-            auth: basicAuth,
-            headers,
-            params
-          });
+
+          async function getDrupalData() {
+            return await axios.get(url, {
+              auth: basicAuth,
+              headers,
+              params
+            });
+          }
+          d = limiter.wrap(getDrupalData);
+
         } catch (error) {
           if (error.response && error.response.status == 405) {
             // The endpoint doesn't support the GET method, so just skip it.
